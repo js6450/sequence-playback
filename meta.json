@@ -2,7 +2,7 @@
   "$schema": "https://dl.viam.dev/module.schema.json",
   "module_id": "devrel:sequence-playback",
   "visibility": "public",
-  "url": "",
+  "url": "https://github.com/viam-devrel/sequence-playback",
   "description": "Replay Viam sequence-capture demonstrations on an arm with an optional gripper, at the recorded timing",
   "applications": null,
   "markdown_link": "README.md",
@@ -15,7 +15,8 @@
     "arch": [
       "linux/amd64",
       "linux/arm64",
-      "darwin/arm64"
+      "darwin/arm64",
+      "windows/amd64"
     ]
   }
 }
