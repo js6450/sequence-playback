@@ -1,0 +1,13 @@
+{
+  "module_name": "sequence-playback",
+  "visibility": "public",
+  "namespace": "devrel",
+  "language": "go",
+  "resource_type": "service",
+  "resource_subtype": "generic",
+  "model_name": "arm-playback",
+  "initialize_git": false,
+  "generator_version": "0.1.0",
+  "generated_on": "2026-09-10T18:17:17.145491Z",
+  "module_readme_link": "README.md"
+}
