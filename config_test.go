@@ -29,16 +29,7 @@ func TestConfigValidate(t *testing.T) {
 	})
 }
 
-func TestConfigDefaults(t *testing.T) {
-	cfg := &Config{Arm: "a", Gripper: "g"}
-	test.That(t, cfg.sourceArm(), test.ShouldEqual, "a")
-	test.That(t, cfg.sourceGripper(), test.ShouldEqual, "g")
-	test.That(t, cfg.gripperKey(), test.ShouldEqual, "position_percentage")
-	test.That(t, cfg.armExtra(), test.ShouldResemble, map[string]any{"wait": false, "streamed": true})
-
-	cfg = &Config{Arm: "a", Gripper: "g", SourceArm: "leader", SourceGripper: "lg", GripperPositionKey: "k", ArmExtra: map[string]any{}}
-	test.That(t, cfg.sourceArm(), test.ShouldEqual, "leader")
-	test.That(t, cfg.sourceGripper(), test.ShouldEqual, "lg")
-	test.That(t, cfg.gripperKey(), test.ShouldEqual, "k")
-	test.That(t, cfg.armExtra(), test.ShouldResemble, map[string]any{})
+func TestConfigArmExtraDefault(t *testing.T) {
+	test.That(t, (&Config{}).armExtra(), test.ShouldResemble, map[string]any{"wait": false, "streamed": true})
+	test.That(t, (&Config{ArmExtra: map[string]any{}}).armExtra(), test.ShouldResemble, map[string]any{})
 }

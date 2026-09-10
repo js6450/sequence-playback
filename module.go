@@ -1,6 +1,7 @@
 package sequenceplayback
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -50,27 +51,6 @@ func (cfg *Config) Validate(path string) ([]string, []string, error) {
 	return deps, nil, nil
 }
 
-func (cfg *Config) sourceArm() string {
-	if cfg.SourceArm != "" {
-		return cfg.SourceArm
-	}
-	return cfg.Arm
-}
-
-func (cfg *Config) sourceGripper() string {
-	if cfg.SourceGripper != "" {
-		return cfg.SourceGripper
-	}
-	return cfg.Gripper
-}
-
-func (cfg *Config) gripperKey() string {
-	if cfg.GripperPositionKey != "" {
-		return cfg.GripperPositionKey
-	}
-	return "position_percentage"
-}
-
 // armExtra is passed to every paced MoveToJointPositions. The default is the SO-101
 // driver's streaming-setpoint mode; drivers that don't know these keys ignore them.
 func (cfg *Config) armExtra() map[string]any {
@@ -87,12 +67,12 @@ type armPlayback struct {
 	cfg    *Config
 	arm    arm.Arm
 	player *player
-	clock  clock
 
-	// cloud access; tests replace these
-	fetch func(ctx context.Context, id string) (*Sequence, error)
-	list  func(ctx context.Context) ([]map[string]any, error)
-	viam  *app.ViamClient
+	// cloud access; tests replace fetch
+	fetch    func(ctx context.Context, id string) (*Sequence, error)
+	viam     *app.ViamClient
+	dc       *app.DataClient
+	cloudErr error
 
 	mu        sync.Mutex
 	cache     map[string]*Sequence
@@ -116,9 +96,9 @@ func NewArmPlayback(ctx context.Context, deps resource.Dependencies, rawConf res
 		logger: logger,
 		cfg:    cfg,
 		arm:    a,
-		clock:  realClock{},
 		cache:  map[string]*Sequence{},
-		player: &player{arm: a, armExtra: cfg.armExtra(), gripperKey: cfg.gripperKey()},
+		player: &player{arm: a, armExtra: cfg.armExtra(), clock: realClock{},
+			gripperKey: cmp.Or(cfg.GripperPositionKey, "position_percentage")},
 	}
 	if cfg.Gripper != "" {
 		if s.player.gripper, err = gripper.FromDependencies(deps, cfg.Gripper); err != nil {
@@ -128,21 +108,17 @@ func NewArmPlayback(ctx context.Context, deps resource.Dependencies, rawConf res
 
 	// The module manager supplies VIAM_API_KEY / VIAM_API_KEY_ID. Without them the
 	// resource still builds; play and list report the problem when called.
-	s.viam, err = app.CreateViamClientFromEnvVars(ctx, nil, logger)
-	if err != nil {
+	if s.viam, err = app.CreateViamClientFromEnvVars(ctx, nil, logger); err != nil {
 		logger.Warnw("cloud client unavailable; play and list will fail", "error", err)
-		s.fetch = func(context.Context, string) (*Sequence, error) {
-			return nil, fmt.Errorf("cloud client unavailable: %w", err)
-		}
-		s.list = func(context.Context) ([]map[string]any, error) {
-			return nil, fmt.Errorf("cloud client unavailable: %w", err)
-		}
+		s.cloudErr = fmt.Errorf("cloud client unavailable: %w", err)
 	} else {
-		dc := s.viam.DataClient()
-		s.fetch = func(ctx context.Context, id string) (*Sequence, error) {
-			return fetchSequence(ctx, dc, id, cfg.sourceArm(), cfg.sourceGripper(), cfg.gripperKey())
+		s.dc = s.viam.DataClient()
+	}
+	s.fetch = func(ctx context.Context, id string) (*Sequence, error) {
+		if s.cloudErr != nil {
+			return nil, s.cloudErr
 		}
-		s.list = func(ctx context.Context) ([]map[string]any, error) { return listSequences(ctx, dc, cfg.DatasetID) }
+		return fetchSequence(ctx, s.dc, id, cmp.Or(cfg.SourceArm, cfg.Arm), cmp.Or(cfg.SourceGripper, cfg.Gripper), s.player.gripperKey)
 	}
 	return s, nil
 }
@@ -159,7 +135,10 @@ func (s *armPlayback) DoCommand(ctx context.Context, cmd map[string]interface{})
 		if s.cfg.DatasetID == "" {
 			return nil, errors.New("list requires dataset_id in the service config")
 		}
-		seqs, err := s.list(ctx)
+		if s.cloudErr != nil {
+			return nil, s.cloudErr
+		}
+		seqs, err := listSequences(ctx, s.dc, s.cfg.DatasetID)
 		if err != nil {
 			return nil, err
 		}
@@ -178,9 +157,7 @@ func (s *armPlayback) toInputs(ctx context.Context, deg [][]float64) ([][]refere
 	}
 	out := make([][]referenceframe.Input, len(deg))
 	for i, d := range deg {
-		vals := make([]float64, len(d))
-		copy(vals, d)
-		if out[i], err = referenceframe.InputsFromJointPositions(kin, &pb.JointPositions{Values: vals}); err != nil {
+		if out[i], err = referenceframe.InputsFromJointPositions(kin, &pb.JointPositions{Values: d}); err != nil {
 			return nil, fmt.Errorf("frame %d: %w", i, err)
 		}
 	}
@@ -232,7 +209,6 @@ func (s *armPlayback) play(ctx context.Context, cmd map[string]any) (map[string]
 	s.lastError = ""
 	wctx, cancel := context.WithCancel(context.Background())
 	s.cancel, s.done = cancel, make(chan struct{})
-	s.player.clock = s.clock
 	go s.worker(wctx, seq, inputs)
 	s.logger.Infow("playback started", "sequence_id", id, "frames", len(inputs), "duration", seq.Duration())
 	return map[string]any{

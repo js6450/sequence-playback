@@ -51,7 +51,7 @@ func newSvc(t *testing.T, cfg *Config) *svcRig {
 	res, err := NewArmPlayback(context.Background(), deps, conf, logging.NewTestLogger(t))
 	test.That(t, err, test.ShouldBeNil)
 	r.svc = res.(*armPlayback)
-	r.svc.clock = &fakeClock{now: t0}
+	r.svc.player.clock = &fakeClock{now: t0}
 	r.svc.fetch = func(_ context.Context, id string) (*Sequence, error) {
 		r.fetches++
 		if id == "missing" {
