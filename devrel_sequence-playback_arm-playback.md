@@ -78,4 +78,4 @@ Stops the current playback and halts the arm. Does nothing if idle.
 ```
 
 Returns `state` (`idle` or `playing`), `sequence_id`, `frame_index`, `frame_count`, and
-`last_error`.
+`last_error`. The same map is returned by the resource's `Status` method.

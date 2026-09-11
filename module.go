@@ -130,7 +130,7 @@ func (s *armPlayback) DoCommand(ctx context.Context, cmd map[string]interface{})
 	case "stop":
 		return s.stop()
 	case "status":
-		return s.status(), nil
+		return s.Status(ctx)
 	case "list":
 		if s.cfg.DatasetID == "" {
 			return nil, errors.New("list requires dataset_id in the service config")
@@ -245,7 +245,8 @@ func (s *armPlayback) stop() (map[string]any, error) {
 	return map[string]any{"status": "stopped"}, nil
 }
 
-func (s *armPlayback) status() map[string]any {
+// Status reports playback state; also served by the "status" DoCommand.
+func (s *armPlayback) Status(context.Context) (map[string]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := map[string]any{"state": "idle", "sequence_id": s.sequence, "last_error": s.lastError,
@@ -256,7 +257,7 @@ func (s *armPlayback) status() map[string]any {
 	if s.cancel != nil {
 		st["state"] = "playing"
 	}
-	return st
+	return st, nil
 }
 
 func (s *armPlayback) Close(context.Context) error {
