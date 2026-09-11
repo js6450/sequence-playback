@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"go.viam.com/rdk/app"
+	"go.viam.com/rdk/components/arm"
+	"go.viam.com/rdk/components/gripper"
 )
 
 // Sequence is one captured demonstration, ready to replay. Joint values are kept in the
@@ -96,13 +98,13 @@ func fetchSequence(ctx context.Context, dc *app.DataClient, id, sourceArm, sourc
 		return nil, fmt.Errorf("getting sequence %q: %w", id, err)
 	}
 	interval := app.CaptureInterval{Start: meta.StartTime, End: meta.EndTime}
-	armRows, err := dc.ExportTabularData(ctx, meta.PartID, sourceArm, "arm", "JointPositions", interval, nil)
+	armRows, err := dc.ExportTabularData(ctx, meta.PartID, sourceArm, arm.API.String(), "JointPositions", interval, nil)
 	if err != nil {
 		return nil, fmt.Errorf("exporting %s JointPositions for sequence %q: %w", sourceArm, id, err)
 	}
 	var gripperRows []*app.ExportTabularDataResponse
 	if sourceGripper != "" {
-		gripperRows, err = dc.ExportTabularData(ctx, meta.PartID, sourceGripper, "gripper", "DoCommand", interval, nil)
+		gripperRows, err = dc.ExportTabularData(ctx, meta.PartID, sourceGripper, gripper.API.String(), "DoCommand", interval, nil)
 		if err != nil {
 			return nil, fmt.Errorf("exporting %s DoCommand for sequence %q: %w", sourceGripper, id, err)
 		}
